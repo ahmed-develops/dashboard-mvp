@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Data Plot</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <canvas id="myChart" width="400" height="200"></canvas>
+  
+  <script>
+    const ctx = document.getElementById('myChart').getContext('2d');
+    
+    // Chart.js configuration
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [], // Time labels
+        datasets: [{
+          label: 'Sensor Data',
+          data: [], // Data points
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1,
+        }]
+      },
+      options: {
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'minute'
+            }
+          }
+        }
+      }
+    });
+
+    // Fetch historical data on page load
+    fetch('/historical-data')
+      .then(response => response.json())
+      .then(data => {
+        data.forEach(point => {
+          chart.data.labels.push(new Date(point.time));
+          chart.data.datasets[0].data.push(point.value);
+        });
+        chart.update();
+      });
+
+    // Open WebSocket connection for real-time data
+    const socket = new WebSocket(`ws://${window.location.host}`);
+    socket.onmessage = (event) => {
+      const realTimeData = JSON.parse(event.data);
+      chart.data.labels.push(new Date(realTimeData.time));
+      chart.data.datasets[0].data.push(realTimeData.value);
+      
+      // Remove old data points if needed (to avoid overflow)
+      if (chart.data.labels.length > 100) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+
+      chart.update();
+    };
+  </script>
+</body>
+</html>
