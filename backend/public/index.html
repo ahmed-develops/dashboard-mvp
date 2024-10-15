@@ -38,14 +38,15 @@
 
     // Fetch historical data on page load
     fetch('/historical-data')
-      .then(response => response.json())
-      .then(data => {
-        data.forEach(point => {
-          chart.data.labels.push(new Date(point.time));
-          chart.data.datasets[0].data.push(point.value);
-        });
-        chart.update();
-      });
+  .then(response => response.json())
+  .then(data => {
+    data.forEach(point => {
+      chart.data.labels.push(new Date(point.time));
+      chart.data.datasets[0].data.push(Number(point.potValue)); // Ensure potValue is converted to a number
+    });
+    chart.update();
+  });
+
 
     // Open WebSocket connection for real-time data
     const socket = new WebSocket(`ws://${window.location.host}`);
