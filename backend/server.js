@@ -1,4 +1,4 @@
-// 'use strict'
+'use strict'
 // /** @module query 
 //  * Queries a data point in InfluxDB using the Javascript client library with Node.js.
 // **/
@@ -93,7 +93,7 @@ const convertBigInt = (value) => (typeof value === 'bigint' ? value.toString() :
 async function getHistoricalData() {
     const query = `SELECT *
     FROM "wifi_status"
-    WHERE time >= now() - interval '4 day' AND time <= now() - interval '2 day'
+    WHERE time >= now() - interval '7 day' AND time <= now() - interval '2 day'
     AND "potValue" IS NOT NULL`;
 
     let data = [];
@@ -103,22 +103,28 @@ async function getHistoricalData() {
         for await (const row of rows) {
             let SSID = row.SSID || '';
             let device = row.device || '';
-            let potValue = convertBigInt(row.potValue || '');
-            let random = convertBigInt(row.random || '');
-            let rssi = row.rssi || '';
-            let sensor1 = row.sensor1 || '';
+            let potValue = typeof row.potValue === 'bigint' ? Number(row.potValue) : row.potValue;
+            let random = typeof row.random === 'bigint' ? Number(row.random) : row.random;
+            let rssiValue = row.rssi && typeof row.rssi === 'object' ? row.rssi.someProperty || 0 : row.rssi || 0;
+            let sensor1Value = row.sensor1 && typeof row.sensor1 === 'object' ? row.sensor1.someProperty || 0 : row.sensor1 || 0;
+            let time = new Date(row.time);  // Convert the number to a Date object and then to ISO string
+            // let potValue = convertBigInt(row.potValue || '');
+            // let random = convertBigInt(row.random || '');
+            // let rssi = row.rssi || '';
+            // let sensor1 = row.sensor1 || '';
+            // let time = new Date(row.time);
             
             console.log({
-                SSID: typeof row.SSID,
-                device: typeof row.device,
-                potValue: typeof row.potValue,
-                random: typeof row.random,
-                rssi: typeof row.rssi,
-                sensor1: typeof row.sensor1,
-                time: typeof row.time
+                SSID: typeof SSID,
+                device: typeof device,
+                potValue: typeof potValue,
+                random: typeof random,
+                rssi: typeof rssiValue,
+                sensor1: typeof sensor1Value,
+                time: typeof time
             });
             // Convert time if it's a BigInt or convert to ISO string for regular numbers
-            let time = typeof row.time === 'bigint' ? row.time.toString() : new Date(Number(row.time)).toISOString();
+            // let time = typeof row.time === 'bigint' ? row.time.toString() : new Date(Number(row.time)).toISOString();
 
             data.push({
                 time: time,
@@ -126,8 +132,8 @@ async function getHistoricalData() {
                 device: device,
                 potValue: potValue,
                 random: random,
-                rssi: rssi,
-                sensor1: sensor1
+                rssi: rssiValue,
+                sensor1: sensor1Value
             });
         }
     } catch (err) {
