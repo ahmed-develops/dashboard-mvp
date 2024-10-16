@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Data Plot</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
   <canvas id="myChart" width="400" height="200"></canvas>
@@ -29,32 +30,31 @@
           x: {
             type: 'time',
             time: {
-              unit: 'minute'
-            }
-          }
-        }
-      }
+              unit: 'minute',
+            },
+          },
+        },
+      },
     });
 
     // Fetch historical data on page load
-    fetch('/historical-data')
-  .then(response => response.json())
-  .then(data => {
-    data.forEach(point => {
-      chart.data.labels.push(new Date(point.time));
-      chart.data.datasets[0].data.push(Number(point.potValue)); // Ensure potValue is converted to a number
-    });
-    chart.update();
-  });
-
+    fetch('http://localhost:3000/historical-data')
+      .then(response => response.json())
+      .then(data => {
+        data.forEach(point => {
+          chart.data.labels.push(new Date(point.time));
+          chart.data.datasets[0].data.push(Number(point.potValue));
+        });
+        chart.update();
+      });
 
     // Open WebSocket connection for real-time data
     const socket = new WebSocket(`ws://${window.location.host}`);
     socket.onmessage = (event) => {
       const realTimeData = JSON.parse(event.data);
       chart.data.labels.push(new Date(realTimeData.time));
-      chart.data.datasets[0].data.push(realTimeData.value);
-      
+      chart.data.datasets[0].data.push(realTimeData.potValue);
+
       // Remove old data points if needed (to avoid overflow)
       if (chart.data.labels.length > 100) {
         chart.data.labels.shift();
