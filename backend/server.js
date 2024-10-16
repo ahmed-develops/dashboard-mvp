@@ -74,15 +74,11 @@
 
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors'); // remove if using the same port, for testing now
 const { InfluxDBClient, Point } = require('@influxdata/influxdb3-client');
 const WebSocket = require('ws');
 
 // Initialize Express and WebSocket server
 const app = express();
-app.use(cors({
-    origin: 'http://127.0.0.1:5500'  // Allow only this origin
-  })); // remove if using the same port, for testing now
 const port = 3000;
 const wss = new WebSocket.Server({ noServer: true });
 
@@ -90,11 +86,15 @@ const wss = new WebSocket.Server({ noServer: true });
 const token = process.env.INFLUXDB_TOKEN;
 const client = new InfluxDBClient({ host: 'https://us-east-1-1.aws.cloud2.influxdata.com', token: token });
 
+// Helper function to convert BigInt to string or return the value as is
+const convertBigInt = (value) => (typeof value === 'bigint' ? value.toString() : value);
+
 // Function to fetch historical data from InfluxDB
 async function getHistoricalData() {
     const query = `SELECT *
     FROM "wifi_status"
-    WHERE time >= now() - interval '7 day' AND time <= now() - interval '2 day'`;
+    WHERE time >= now() - interval '7 day' AND time <= now() - interval '2 day'
+    AND "potValue" IS NOT NULL`;
 
     let data = [];
 
@@ -103,13 +103,11 @@ async function getHistoricalData() {
         for await (const row of rows) {
             let SSID = row.SSID || '';
             let device = row.device || '';
-            // let potValue = typeof row.potValue === 'bigint' ? Number(row.potValue) : row.potValue;
-            // let random = typeof row.random === 'bigint' ? Number(row.random) : row.random;
-            let potValue_converted = row.potValue !== undefined ? Number(row.potValue) : 0;  // Handle missing potValue
-            let random_converted = row.random !== undefined ? Number(row.random) : 0;  // Handle missing random
-            let rssiValue = row.rssiValue !== undefined ? Number(row.rssiValue) : 0;
-            let sensor1Value = row.sensor1Value !== undefined ? Number(row.sensor1Value) : 0;
-            let time_converted = new Date(row.time).toISOString();  // Convert the number to a Date object and then to ISO string
+            let potValue = typeof row.potValue === 'bigint' ? Number(row.potValue) : row.potValue;
+            let random = typeof row.random === 'bigint' ? Number(row.random) : row.random;
+            let rssiValue = row.rssi && typeof row.rssi === 'object' ? row.rssi.someProperty || 0 : row.rssi || 0;
+            let sensor1Value = row.sensor1 && typeof row.sensor1 === 'object' ? row.sensor1.someProperty || 0 : row.sensor1 || 0;
+            let time = new Date(row.time);  // Convert the number to a Date object and then to ISO string
             // let potValue = convertBigInt(row.potValue || '');
             // let random = convertBigInt(row.random || '');
             // let rssi = row.rssi || '';
@@ -119,21 +117,21 @@ async function getHistoricalData() {
             console.log({
                 SSID: typeof SSID,
                 device: typeof device,
-                potValue: typeof potValue_converted,
-                random: typeof random_converted,
+                potValue: typeof potValue,
+                random: typeof random,
                 rssi: typeof rssiValue,
                 sensor1: typeof sensor1Value,
-                time: typeof time_converted
+                time: typeof time
             });
             // Convert time if it's a BigInt or convert to ISO string for regular numbers
             // let time = typeof row.time === 'bigint' ? row.time.toString() : new Date(Number(row.time)).toISOString();
 
             data.push({
-                time: time_converted,
+                time: time,
                 SSID: SSID,
                 device: device,
-                potValue: potValue_converted,
-                random: random_converted,
+                potValue: potValue,
+                random: random,
                 rssi: rssiValue,
                 sensor1: sensor1Value
             });
@@ -165,7 +163,7 @@ wss.on('connection', (ws) => {
     setInterval(() => {
         const sensorData = {
             time: new Date().toISOString(),
-            potValue: Math.random() * 100, // Simulate sensor value
+            value: Math.random() * 100, // Simulate sensor value
         };
         ws.send(JSON.stringify(sensorData));
     }, 1000); // Send new data every 1 second
