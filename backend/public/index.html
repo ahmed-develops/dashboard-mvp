@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Real-Time Data Plot</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
   <canvas id="myChart" width="400" height="200"></canvas>
@@ -18,9 +19,15 @@
       data: {
         labels: [], // Time labels
         datasets: [{
-          label: 'Sensor Data',
-          data: [], // Data points
+          label: 'potValue',
+          data: [], // Temperature data points
           borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1,
+        },
+        {
+          label: 'random',
+          data: [], // Humidity data points
+          borderColor: 'rgba(192, 75, 75, 1)',
           borderWidth: 1,
         }]
       },
@@ -29,36 +36,29 @@
           x: {
             type: 'time',
             time: {
-              unit: 'minute'
-            }
-          }
-        }
-      }
+              unit: 'minute',
+            },
+          },
+        },
+      },
     });
-
-    // Fetch historical data on page load
-    fetch('/historical-data')
-  .then(response => response.json())
-  .then(data => {
-    data.forEach(point => {
-      chart.data.labels.push(new Date(point.time));
-      chart.data.datasets[0].data.push(Number(point.potValue)); // Ensure potValue is converted to a number
-    });
-    chart.update();
-  });
-
 
     // Open WebSocket connection for real-time data
-    const socket = new WebSocket(`ws://${window.location.host}`);
+    const socket = new WebSocket(`ws://192.168.137.69:3001`);
     socket.onmessage = (event) => {
       const realTimeData = JSON.parse(event.data);
-      chart.data.labels.push(new Date(realTimeData.time));
-      chart.data.datasets[0].data.push(realTimeData.value);
-      
+      const currentTime = new Date(); // Use current time for real-time data
+
+      // Update the chart with the new data
+      chart.data.labels.push(currentTime);
+      chart.data.datasets[0].data.push(realTimeData.potValue); // Temperature data
+      chart.data.datasets[1].data.push(realTimeData.random);    // Humidity data
+
       // Remove old data points if needed (to avoid overflow)
       if (chart.data.labels.length > 100) {
         chart.data.labels.shift();
         chart.data.datasets[0].data.shift();
+        chart.data.datasets[1].data.shift();
       }
 
       chart.update();
