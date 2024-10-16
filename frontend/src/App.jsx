@@ -9,7 +9,7 @@ function App() {
 
   useEffect(() => {
     // Initialize WebSocket connection
-    ws.current = new WebSocket('ws://192.168.137.69:3001');  // Replace with your backend server IP
+    ws.current = new WebSocket('ws://192.168.137.98:3001');  // Replace with your backend server IP
 
     ws.current.onopen = () => {
       console.log('WebSocket connection opened');

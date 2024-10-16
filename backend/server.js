@@ -80,9 +80,7 @@ const WebSocket = require('ws');
 
 // Initialize Express and WebSocket server
 const app = express();
-app.use(cors({
-    origin: 'http://127.0.0.1:5500'  // Allow only this origin
-  })); // remove if using the same port, for testing now
+app.use(cors()); // remove if using the same port, for testing now
 const port = 3001;
 const wss = new WebSocket.Server({ noServer: true });
 
@@ -94,7 +92,7 @@ const client = new InfluxDBClient({ host: 'https://us-east-1-1.aws.cloud2.influx
 async function getHistoricalData() {
     const query = `SELECT *
     FROM "wifi_status"
-    WHERE time >= now() - interval '7 day' AND time <= now() - interval '2 day' order by time desc`;
+    WHERE time >= now() - interval '3 hours' order by time asc`;
 
     let data = [];
 
