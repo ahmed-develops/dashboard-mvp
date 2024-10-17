@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Dropdown, Button } from 'flowbite-react';
+import { Dropdown } from 'flowbite-react';
 import ReactApexChart from 'react-apexcharts';
 import axios from 'axios';
 
@@ -14,7 +14,7 @@ function App() {
 
   // WebSocket connection setup
   useEffect(() => {
-    ws.current = new WebSocket('ws://192.168.137.98:3001'); // Replace with your backend server IP
+    ws.current = new WebSocket('ws://192.168.137.246:3001'); // Replace with your backend server IP
 
     ws.current.onopen = () => {
       console.log('WebSocket connection opened');
@@ -52,12 +52,19 @@ function App() {
 
   const fetchHistoricalData = async () => {
     try {
-      const response = await axios.get("http://192.168.137.98:3001/historical-data");
-      // Transform the data into the required format for the chart
-      const transformedData = response.data.map((entry) => ({
-        x: new Date(entry.time).toLocaleTimeString(), // Format the time for x-axis
-        y: entry.random, // Use random for y-axis
-      }));
+      const response = await axios.get("http://192.168.137.246:3001/historical-data");
+      
+      // Get the current time
+      const currentTime = new Date();
+  
+      // Transform the data into the required format for the chart and filter out future points
+      const transformedData = response.data
+        .filter((entry) => new Date(entry.time) <= currentTime) // Omit points after current time
+        .map((entry) => ({
+          x: new Date(entry.time).toLocaleTimeString(), // Format the time for x-axis
+          y: entry.random, // Use random for y-axis
+        }));
+  
       setGraphData(transformedData); // Update the graphData state with the transformed data
       setLoading(false); // Data is fetched and processed, so disable loading state
     } catch (error) {
@@ -65,6 +72,7 @@ function App() {
       setLoading(false); // Disable loading even if there is an error
     }
   };
+  
 
   // Handle slider change for LED on D23
   const handleSliderChange1 = (event) => {
@@ -179,11 +187,23 @@ function App() {
     },
     yaxis: {
       show: true,
+      labels: {
+        formatter: function (value) {
+          return value.toFixed(1); // Format y-axis labels to 2 decimal places
+        },
+      },
     },
   };
 
   return (
     <div className="App">
+      {/* Dropdown for selecting time range */}
+      <Dropdown label="Select Time Range">
+        <Dropdown.Item>Last 7 Days</Dropdown.Item>
+        <Dropdown.Item>Last 14 Days</Dropdown.Item>
+        <Dropdown.Item>Last 30 Days</Dropdown.Item>
+      </Dropdown>
+
       {/* Graph Component */}
       <div className="max-w-sm w-full bg-white rounded-lg shadow dark:bg-gray-800 p-4 md:p-6">
         <div className="flex justify-between">

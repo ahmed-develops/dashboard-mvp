@@ -20,19 +20,13 @@ const client = new InfluxDB({ url, token });
 const queryApi = client.getQueryApi(org); // Get query API for your organization
 
 // Function to fetch historical data from InfluxDB using Flux
-async function getHistoricalData(range) {
+async function getHistoricalData() {
     const totalPoints = 10; // We want exactly 10 points
-
-    // Ensure range is a valid time duration (e.g., -24h)
-    const timeRange = range.startsWith('-') ? range : `-${range}`;
-
-    // Calculate windowDuration in minutes based on the range
-    const hours = parseInt(range.replace(/\D/g, ''), 10); // Extract numeric part from range (assuming "h" is passed)
-    const windowDuration = `${(hours) / totalPoints}m`; // Convert hours to minutes and divide by totalPoints
+    const windowDuration = '12m'; // 144 minutes = 2.4 hours per window
 
     const fluxQuery = `
         from(bucket: "${bucket}")
-            |> range(start: ${timeRange})
+            |> range(start: -2h)
             |> filter(fn: (r) => r._measurement == "wifi_status" and r._field == "random")
             |> aggregateWindow(every: ${windowDuration}, fn: mean, createEmpty: false)
             |> sort(columns: ["_time"], desc: false)
@@ -76,16 +70,14 @@ async function getHistoricalData(range) {
     });
 }
 
+
 // Serve static files (client-side HTML/JS for the graph)
 app.use(express.static('public'));
 
 // Endpoint for getting historical data
-app.get('/historical-data/:range', async (req, res) => {
+app.get('/historical-data', async (req, res) => {
     try {
-        const { range } = req.params;
-        console.log(range)
-
-        const historicalData = await getHistoricalData(range);
+        const historicalData = await getHistoricalData();
         res.json(historicalData);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -100,7 +92,7 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         try {
             const sensorData = JSON.parse(message); // Parse the sensor data from Arduino
-            // console.log('Received sensor data:', sensorData);
+            console.log('Received sensor data:', sensorData);
 
             // Broadcast the sensor data to all connected clients
             wss.clients.forEach((client) => {
