@@ -1,34 +1,33 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors'); // CORS for testing, remove if not needed
+const cors = require('cors'); 
 const { InfluxDB } = require('@influxdata/influxdb-client');
 const WebSocket = require('ws');
+const aedes = require('aedes')();
+const net = require('net');
+const mqttWs = require('websocket-stream'); // For MQTT over WebSocket
 
-// Initialize Express and WebSocket server
 const app = express();
-app.use(cors()); // CORS enabled for cross-origin requests
+app.use(cors()); 
 const port = 3001;
-const wss = new WebSocket.Server({ noServer: true });
+const mqttPort = 1883;  // Standard MQTT port
+const mqttWsPort = 8883; // MQTT over WebSocket port
 
 // InfluxDB configuration
 const token = process.env.INFLUXDB_TOKEN;
-const url = process.env.INFLUXDB_URL || 'https://us-east-1-1.aws.cloud2.influxdata.com'; // Your InfluxDB URL
-const org = process.env.INFLUXDB_ORG; // Organization in InfluxDB
-const bucket = process.env.INFLUXDB_BUCKET || 'sensor_data'; // Your InfluxDB bucket
+const url = process.env.INFLUXDB_URL || 'https://us-east-1-1.aws.cloud2.influxdata.com'; 
+const org = process.env.INFLUXDB_ORG; 
+const bucket = process.env.INFLUXDB_BUCKET || 'sensor_data';
 
 const client = new InfluxDB({ url, token });
-const queryApi = client.getQueryApi(org); // Get query API for your organization
+const queryApi = client.getQueryApi(org);
 
 // Function to fetch historical data from InfluxDB using Flux
 async function getHistoricalData(range) {
-    const totalPoints = 10; // We want exactly 10 points
-
-    // Ensure range is a valid time duration (e.g., -24h)
+    const totalPoints = 10;
     const timeRange = range.startsWith('-') ? range : `-${range}`;
-
-    // Calculate windowDuration in minutes based on the range
-    const hours = parseInt(range.replace(/\D/g, ''), 10); // Extract numeric part from range (assuming "h" is passed)
-    const windowDuration = `${(hours) / totalPoints}m`; // Convert hours to minutes and divide by totalPoints
+    const hours = parseInt(range.replace(/\D/g, ''), 10);
+    const windowDuration = `${(hours) / totalPoints}m`;
 
     const fluxQuery = `
         from(bucket: "${bucket}")
@@ -45,8 +44,8 @@ async function getHistoricalData(range) {
             next(row, tableMeta) {
                 const tableObject = tableMeta.toObject(row);
                 data.push({
-                    time: new Date(tableObject._time).toISOString(), // Convert to ISO string
-                    random: tableObject._value !== undefined ? Number(tableObject._value) : 0 // Aggregated "random" value
+                    time: new Date(tableObject._time).toISOString(),
+                    random: tableObject._value !== undefined ? Number(tableObject._value) : 0
                 });
             },
             error(error) {
@@ -54,22 +53,6 @@ async function getHistoricalData(range) {
                 reject(error);
             },
             complete() {
-                console.log('Flux query completed');
-                
-                // Manually adjust last point if it's not matching expected interval
-                if (data.length > 1) {
-                    const expectedInterval = 12 * 60 * 1000; // 12 minutes in milliseconds
-                    const secondLastPoint = new Date(data[data.length - 2].time).getTime();
-                    const lastPoint = new Date(data[data.length - 1].time).getTime();
-                    const difference = lastPoint - secondLastPoint;
-
-                    if (difference !== expectedInterval) {
-                        // Correct the last point's timestamp
-                        const correctedTime = new Date(secondLastPoint + expectedInterval).toISOString();
-                        data[data.length - 1].time = correctedTime;
-                    }
-                }
-
                 resolve(data);
             }
         });
@@ -83,8 +66,6 @@ app.use(express.static('public'));
 app.get('/historical-data/:range', async (req, res) => {
     try {
         const { range } = req.params;
-        console.log(range)
-
         const historicalData = await getHistoricalData(range);
         res.json(historicalData);
     } catch (err) {
@@ -92,20 +73,43 @@ app.get('/historical-data/:range', async (req, res) => {
     }
 });
 
+// Create TCP server for MQTT
+const mqttServer = net.createServer(aedes.handle);
+mqttServer.listen(mqttPort, function () {
+    console.log(`MQTT broker started on port ${mqttPort}`);
+});
+
+// MQTT over WebSocket server
+const mqttWsServer = require('http').createServer();
+mqttWs.createServer({ server: mqttWsServer }, aedes.handle);
+mqttWsServer.listen(mqttWsPort, function () {
+    console.log(`MQTT over WebSocket server started on port ${mqttWsPort}`);
+});
+
+// Aedes event listeners for broker
+aedes.on('client', (client) => {
+    console.log(`Client connected: ${client.id}`);
+});
+
+aedes.on('clientDisconnect', (client) => {
+    console.log(`Client disconnected: ${client.id}`);
+});
+
+aedes.on('publish', (packet, client) => {
+    console.log(`Message published on topic ${packet.topic}: ${packet.payload}`);
+});
+
 // WebSocket server for real-time data
+const wss = new WebSocket.Server({ noServer: true });
 wss.on('connection', (ws) => {
     console.log('New client connected for real-time data');
 
-    // Listen for real-time sensor data sent by the Arduino
     ws.on('message', (message) => {
         try {
-            const sensorData = JSON.parse(message); // Parse the sensor data from Arduino
-            // console.log('Received sensor data:', sensorData);
-
-            // Broadcast the sensor data to all connected clients
+            const sensorData = JSON.parse(message);
             wss.clients.forEach((client) => {
                 if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify(sensorData)); // Send the sensor data to each connected client
+                    client.send(JSON.stringify(sensorData));
                 }
             });
         } catch (error) {
@@ -119,7 +123,7 @@ wss.on('connection', (ws) => {
 });
 
 // Handling WebSocket upgrade
-app.server = app.listen(port, () => {
+app.server = app.listen(port, "0.0.0.0" () => {
     console.log(`Server running on port ${port}`);
 });
 
